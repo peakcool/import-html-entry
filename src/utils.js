@@ -116,8 +116,14 @@ export const requestIdleCallback =
 				},
 			});
 		}, 1);
-	};
+		};
 
+/**
+ * 从远程地址中读取 html 内容
+ * @param {*} response 
+ * @param {*} autoDetectCharset 
+ * @returns 
+ */
 export function readResAsString(response, autoDetectCharset) {
 	// 未启用自动检测
 	if (!autoDetectCharset) {

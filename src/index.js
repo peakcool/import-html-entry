@@ -30,6 +30,8 @@ function defaultGetTemplate(tpl) {
 
 /**
  * convert external css link to inline style for performance optimization
+ * 将外部css链接转换为内联样式以优化性能
+ * 为什么呢？
  * @param template
  * @param styles
  * @param opts
@@ -41,7 +43,7 @@ function getEmbedHTML(template, styles, opts = {}) {
 
 	return getExternalStyleSheets(styles, fetch)
 		.then(styleSheets => {
-			embedHTML = styles.reduce((html, styleSrc, i) => {
+			embedHTML = styles.reduce((html, styleSrc, i) => { // 替换 template 的脚本
 				html = html.replace(genLinkReplaceSymbol(styleSrc), `<style>/* ${styleSrc} */${styleSheets[i]}</style>`);
 				return html;
 			}, embedHTML);
@@ -266,8 +268,17 @@ export default function importHTML(url, opts = {}) {
 		.then(html => {
 
 			const assetPublicPath = getPublicPath(url);
+			// template: 已经解析替换过脚本的模板
 			const { template, scripts, entry, styles } = processTpl(getTemplate(html), assetPublicPath, postProcessTemplate);
 
+			/**
+			 * > let a = Promise.resolve('hello').then((res) => ({ value: 'res' }))
+				> a
+				Promise { { value: 'res' } }
+				> a.then((test) =>{ console.log(test) })
+				Promise { <pending> }
+				> { value: 'res' }
+			 */
 			return getEmbedHTML(template, styles, { fetch }).then(embedHTML => ({
 				template: embedHTML,
 				assetPublicPath,
@@ -296,7 +307,7 @@ export function importEntry(entry, opts = {}) {
 		throw new SyntaxError('entry should not be empty!');
 	}
 
-	// html entry
+	// html entry，解析 HTML，返回脚本集合，样式集合，处理的模板 template
 	if (typeof entry === 'string') {
 		return importHTML(entry, {
 			fetch,
@@ -306,7 +317,7 @@ export function importEntry(entry, opts = {}) {
 		});
 	}
 
-	// config entry
+	// config entry，如果是对象
 	if (Array.isArray(entry.scripts) || Array.isArray(entry.styles)) {
 
 		const { scripts = [], styles = [], html = '' } = entry;

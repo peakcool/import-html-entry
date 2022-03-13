@@ -45,6 +45,7 @@ export const genIgnoreAssetReplaceSymbol = url => `<!-- ignore asset ${url || 'f
 export const genModuleScriptReplaceSymbol = (scriptSrc, moduleSupport) => `<!-- ${moduleSupport ? 'nomodule' : 'module'} script ${scriptSrc} ignored by import-html-entry -->`;
 
 /**
+ * 从模板解析并替换脚本
  * parse the script link from the template
  * 1. collect stylesheets
  * 2. use global eval to evaluate the inline scripts
@@ -76,6 +77,7 @@ export default function processTpl(tpl, baseURI, postProcessTemplate) {
 			const styleType = !!match.match(STYLE_TYPE_REGEX);
 			if (styleType) {
 
+				// 获取样式链接，ignore属性
 				const styleHref = match.match(STYLE_HREF_REGEX);
 				const styleIgnore = match.match(LINK_IGNORE_REGEX);
 
@@ -90,12 +92,13 @@ export default function processTpl(tpl, baseURI, postProcessTemplate) {
 					if (styleIgnore) {
 						return genIgnoreAssetReplaceSymbol(newHref);
 					}
-
+					// 添加到样式集合中
 					styles.push(newHref);
 					return genLinkReplaceSymbol(newHref);
 				}
 			}
-
+			
+			// preload, prefetch 属性
 			const preloadOrPrefetchType = match.match(LINK_PRELOAD_OR_PREFETCH_REGEX) && match.match(LINK_HREF_REGEX) && !match.match(LINK_AS_FONT);
 			if (preloadOrPrefetchType) {
 				const [, , linkHref] = match.match(LINK_HREF_REGEX);
@@ -110,7 +113,7 @@ export default function processTpl(tpl, baseURI, postProcessTemplate) {
 			}
 			return match;
 		})
-		.replace(ALL_SCRIPT_REGEX, (match, scriptTag) => {
+		.replace(ALL_SCRIPT_REGEX, (match, scriptTag) => { // 处理 js script 脚本
 			const scriptIgnore = scriptTag.match(SCRIPT_IGNORE_REGEX);
 			const moduleScriptIgnore =
 				(moduleSupport && !!scriptTag.match(SCRIPT_NO_MODULE_REGEX)) ||
@@ -123,7 +126,7 @@ export default function processTpl(tpl, baseURI, postProcessTemplate) {
 				return match;
 			}
 
-			// if it is a external script
+			// if it is a external script 如果是外部链接脚本
 			if (SCRIPT_TAG_REGEX.test(match) && scriptTag.match(SCRIPT_SRC_REGEX)) {
 				/*
 				collect scripts and replace the ref
@@ -156,7 +159,7 @@ export default function processTpl(tpl, baseURI, postProcessTemplate) {
 				if (matchedScriptSrc) {
 					const asyncScript = !!scriptTag.match(SCRIPT_ASYNC_REGEX);
 					scripts.push(asyncScript ? { async: true, src: matchedScriptSrc } : matchedScriptSrc);
-					return genScriptReplaceSymbol(matchedScriptSrc, asyncScript);
+					return genScriptReplaceSymbol(matchedScriptSrc, asyncScript); // 生成 script 标签 <script href="xxx"></script>
 				}
 
 				return match;
@@ -189,9 +192,9 @@ export default function processTpl(tpl, baseURI, postProcessTemplate) {
 	});
 
 	let tplResult = {
-		template,
-		scripts,
-		styles,
+		template, // 替换之后的 html
+		scripts, // 替换的js脚本集合
+		styles, // 替换的css脚本集合
 		// set the last script as entry if have not set
 		entry: entry || scripts[scripts.length - 1],
 	};
