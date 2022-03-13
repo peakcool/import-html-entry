@@ -120,9 +120,9 @@ export const requestIdleCallback =
 
 /**
  * 从远程地址中读取 html 内容
- * @param {*} response 
- * @param {*} autoDetectCharset 
- * @returns 
+ * @param {*} response
+ * @param {*} autoDetectCharset
+ * @returns
  */
 export function readResAsString(response, autoDetectCharset) {
 	// 未启用自动检测
@@ -174,6 +174,11 @@ export function readResAsString(response, autoDetectCharset) {
 
 const evalCache = {};
 
+/**
+ * 将字符串转换为 js 函数，并指定 this 指向，执行时这个上下文已经是 proxy 过的
+ * @param {*} scriptSrc
+ * @param {*} code
+ */
 export function evalCode(scriptSrc, code) {
 	const key = scriptSrc;
 	if (!evalCache[key]) {

@@ -31,7 +31,8 @@ function defaultGetTemplate(tpl) {
 /**
  * convert external css link to inline style for performance optimization
  * 将外部css链接转换为内联样式以优化性能
- * 为什么呢？
+ * 把子应用的外部链接 css，提取出来，放到一个 style 标签里，并且把链接替换成内联样式
+ * 提升加载性能，无须再从远程加载css文件
  * @param template
  * @param styles
  * @param opts
@@ -82,10 +83,21 @@ export function getExternalStyleSheets(styles, fetch = defaultFetch) {
 	));
 }
 
-// for prefetch
+// for prefetch，调用即执行获取脚本
+/**
+ * 在qianku 预加载时调用：
+    const { getExternalScripts, getExternalStyleSheets } = await importEntry(entry, opts);
+    requestIdleCallback(getExternalStyleSheets); // 异步加载脚本
+    requestIdleCallback(getExternalScripts); // 异步加载资源
+ * @param {*} scripts
+ * @param {*} fetch
+ * @param {*} errorCallback
+ * @returns
+ */
 export function getExternalScripts(scripts, fetch = defaultFetch, errorCallback = () => {
 }) {
 
+	// fetch 获取脚本资源
 	const fetchScript = scriptUrl => scriptCache[scriptUrl] ||
 		(scriptCache[scriptUrl] = fetch(scriptUrl).then(response => {
 			// usually browser treats 4xx and 5xx response of script loading as an error and will fire a script error event
@@ -143,6 +155,7 @@ const supportsUserTiming =
 	typeof performance.clearMeasures === 'function';
 
 /**
+ * !!! 核心，在新的上下文中执行子应用脚本
  * FIXME to consistent with browser behavior, we should only provide callback way to invoke success and error event
  * @param entry
  * @param scripts
@@ -162,11 +175,14 @@ export function execScripts(entry, scripts, proxy = window, opts = {}) {
 		.then(scriptsText => {
 
 			const geval = (scriptSrc, inlineScript) => {
+				// 执行前处理
 				const rawCode = beforeExec(inlineScript, scriptSrc) || inlineScript;
 				const code = getExecutableScript(scriptSrc, rawCode, proxy, strictGlobal);
 
+				// 执行脚本
 				evalCode(scriptSrc, code);
 
+				// 执行后处理
 				afterExec(inlineScript, scriptSrc);
 			};
 
@@ -179,11 +195,15 @@ export function execScripts(entry, scripts, proxy = window, opts = {}) {
 					performance.mark(markName);
 				}
 
+				// 如果是外联脚本
 				if (scriptSrc === entry) {
+
+					// 使用代理的上下文
 					noteGlobalProps(strictGlobal ? proxy : window);
 
 					try {
 						// bind window.proxy to change `this` reference in script
+						// 绑定context代理，改变脚本中的this指向
 						geval(scriptSrc, inlineScript);
 						const exports = proxy[getGlobalProp(strictGlobal ? proxy : window)] || {};
 						resolve(exports);
@@ -193,7 +213,7 @@ export function execScripts(entry, scripts, proxy = window, opts = {}) {
 						throw e;
 					}
 				} else {
-					if (typeof inlineScript === 'string') {
+					if (typeof inlineScript === 'string') { // 如果是内联脚本
 						try {
 							// bind window.proxy to change `this` reference in script
 							geval(scriptSrc, inlineScript);
@@ -238,6 +258,12 @@ export function execScripts(entry, scripts, proxy = window, opts = {}) {
 		});
 }
 
+/**
+ * 导入的是 html，解析处理
+ * @param {*} url
+ * @param {*} opts
+ * @returns
+ */
 export default function importHTML(url, opts = {}) {
 	let fetch = defaultFetch;
 	let autoDecodeResponse = false;
@@ -282,9 +308,9 @@ export default function importHTML(url, opts = {}) {
 			return getEmbedHTML(template, styles, { fetch }).then(embedHTML => ({
 				template: embedHTML,
 				assetPublicPath,
-				getExternalScripts: () => getExternalScripts(scripts, fetch),
-				getExternalStyleSheets: () => getExternalStyleSheets(styles, fetch),
-				execScripts: (proxy, strictGlobal, execScriptsHooks = {}) => {
+				getExternalScripts: () => getExternalScripts(scripts, fetch), // 可执行的预加载 js 脚本方法
+				getExternalStyleSheets: () => getExternalStyleSheets(styles, fetch), // 可执行的预加载 css 脚本方法
+				execScripts: (proxy, strictGlobal, execScriptsHooks = {}) => { // 可直接执行的内嵌 js 方法
 					if (!scripts.length) {
 						return Promise.resolve();
 					}
@@ -299,6 +325,12 @@ export default function importHTML(url, opts = {}) {
 		}));
 }
 
+/**
+ * qiankun 预加载时，会调用该方法: const { getExternalScripts, getExternalStyleSheets } = await importEntry(entry, opts);
+ * @param {*} entry
+ * @param {*} opts
+ * @returns
+ */
 export function importEntry(entry, opts = {}) {
 	const { fetch = defaultFetch, getTemplate = defaultGetTemplate, postProcessTemplate } = opts;
 	const getPublicPath = opts.getPublicPath || opts.getDomain || defaultGetPublicPath;
@@ -333,11 +365,12 @@ export function importEntry(entry, opts = {}) {
 				if (!scripts.length) {
 					return Promise.resolve();
 				}
+				// 脚本执行，重新在新的上下文中执行
 				return execScripts(scripts[scripts.length - 1], scripts, proxy, {
 					fetch,
-					strictGlobal,
-					beforeExec: execScriptsHooks.beforeExec,
-					afterExec: execScriptsHooks.afterExec,
+					strictGlobal, // 全局上下文
+					beforeExec: execScriptsHooks.beforeExec, // 执行前的钩子
+					afterExec: execScriptsHooks.afterExec, // 执行后的钩子
 				});
 			},
 		}));
